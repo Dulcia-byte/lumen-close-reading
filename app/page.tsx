@@ -10,6 +10,7 @@ type SavedPhrase = PhraseCard & { id:string; addedAt:number };
 type AnalysisKind = "sentence" | "paragraph";
 type SentenceAnalysis = { sentence:string; kind:AnalysisKind; logic:string; mainClause:string; structure:string[]; explanation:string; translation?:string };
 type SavedSentence = SentenceAnalysis & { id:string; addedAt:number; mode:Mode };
+type ReadingHistory = { id:string; title:string; passage:string; tags:string[]; updatedAt:number };
 
 function meaningFor(item:{definition:string;chineseMeaning?:string}){return item.chineseMeaning||item.definition.split("· 中文：")[1]?.trim()||"";}
 function englishDefinition(item:{definition:string}){return item.definition.split("· 中文：")[0].trim();}
@@ -52,11 +53,12 @@ export default function Home() {
   const [phraseCard,setPhraseCard] = useState<PhraseCard|null>(null);
   const [savedPhrases,setSavedPhrases] = useState<SavedPhrase[]>([]);
   const [savedSentences,setSavedSentences] = useState<SavedSentence[]>([]);
+  const [readingHistory,setReadingHistory] = useState<ReadingHistory[]>([]);
   const [analysis,setAnalysis] = useState<SentenceAnalysis|null>(null);
   const [sentenceLoading,setSentenceLoading] = useState(false);
   const [sentenceError,setSentenceError] = useState("");
   const [panel,setPanel] = useState<"word"|"phrase"|"sentence">("word");
-  const [view,setView] = useState<"read"|"vocab"|"phrases"|"sentences">("read");
+  const [view,setView] = useState<"read"|"history"|"vocab"|"phrases"|"sentences">("read");
   const requestId = useRef(0);
   const passageRef = useRef<HTMLElement|null>(null);
 
@@ -75,6 +77,11 @@ export default function Home() {
     const restoredSentences:SavedSentence[] = sentenceRaw ? (JSON.parse(sentenceRaw) as SavedSentence[]).map((item)=>({...item,kind:item.kind||"sentence",logic:item.logic||item.explanation||""})) : [];
     void (async()=>{try{const response=await fetch("/api/collections",{cache:"no-store"});if(!response.ok)return;const cloud=await response.json() as {word?:SavedWord[];phrase?:SavedPhrase[];sentence?:SavedSentence[]};const words=mergeById(cloud.word||[],restoredWords);const phrases=mergeById(cloud.phrase||[],restoredPhrases);const sentences=mergeById(cloud.sentence||[],restoredSentences);setSaved(words);setSavedPhrases(phrases);setSavedSentences(sentences);localStorage.setItem("lumen-vocabulary",JSON.stringify(words));localStorage.setItem("lumen-phrases",JSON.stringify(phrases));localStorage.setItem("lumen-sentences",JSON.stringify(sentences));await fetch("/api/collections",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items:{word:words,phrase:phrases,sentence:sentences}})});if(words.some((item)=>!meaningFor(item))||phrases.some((item)=>!meaningFor(item)))void backfillMeanings(words,phrases);}catch{}})();
   },[]);
+  useEffect(()=>{void (async()=>{try{const response=await fetch("/api/readings",{cache:"no-store"});if(!response.ok)return;const data=await response.json() as {items?:ReadingHistory[]};const items=data.items||[];setReadingHistory(items);if(items[0]){setArticleTitle(items[0].title);setPassage(items[0].passage);setArticleTags(items[0].tags||[]);}}catch{}})();},[]);
+
+  function openReading(item:ReadingHistory){setArticleTitle(item.title);setPassage(item.passage);setArticleTags(item.tags||[]);setView("read");setActive("");setCard(null);}
+  function removeReading(id:string){setReadingHistory((items)=>items.filter((item)=>item.id!==id));void fetch("/api/readings",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({id})});}
+  function saveReading(item:ReadingHistory){setReadingHistory((items)=>[item,...items.filter((entry)=>entry.id!==item.id)].slice(0,50));void fetch("/api/readings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(item)});}
   function syncItems(items:Partial<{word:SavedWord[];phrase:SavedPhrase[];sentence:SavedSentence[]}>) {void fetch("/api/collections",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({items})});}
   function deleteCloudItem(kind:"word"|"phrase"|"sentence",id:string) {void fetch("/api/collections",{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({kind,id})});}
 
@@ -180,21 +187,9 @@ export default function Home() {
   function removePhrase(id:string){const next=savedPhrases.filter((item)=>item.id!==id);setSavedPhrases(next);localStorage.setItem("lumen-phrases",JSON.stringify(next));deleteCloudItem("phrase",id);}
 
   const startReading = async () => {
-    const lines = draft.split(/\r?\n/).map((line)=>line.trim());
-    const firstContentIndex = lines.findIndex(Boolean);
-    if (firstContentIndex < 0) return;
-    const remaining = lines.slice(firstContentIndex + 1).join("\n").trim();
-    const hasSeparateTitle = Boolean(remaining);
-    const nextPassage = hasSeparateTitle ? remaining : lines[firstContentIndex];
-    setArticleTitle(hasSeparateTitle ? lines[firstContentIndex] : copy("Untitled reading","未命名精读"));
-    setPassage(nextPassage);
-    setArticleTags([]); setTagsLoading(true);
-    setView("read"); setActive(""); setCard(null);
-    try {
-      const response=await fetch("/api/metadata",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({passage:nextPassage,mode})});
-      const data=await response.json();
-      if(response.ok&&Array.isArray(data.tags))setArticleTags(data.tags.slice(0,3));
-    } finally { setTagsLoading(false); }
+    const lines=draft.split(/\r?\n/).map((line)=>line.trim());const firstContentIndex=lines.findIndex(Boolean);if(firstContentIndex<0)return;const remaining=lines.slice(firstContentIndex+1).join("\n").trim();const hasSeparateTitle=Boolean(remaining);const nextPassage=hasSeparateTitle?remaining:lines[firstContentIndex];const nextTitle=hasSeparateTitle?lines[firstContentIndex]:copy("Untitled reading","未命名精读");
+    setArticleTitle(nextTitle);setPassage(nextPassage);setArticleTags([]);setTagsLoading(true);setView("read");setActive("");setCard(null);let tags:string[]=[];
+    try{const response=await fetch("/api/metadata",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({passage:nextPassage,mode})});const data=await response.json();if(response.ok&&Array.isArray(data.tags)){tags=data.tags.slice(0,3);setArticleTags(tags);}}finally{setTagsLoading(false);const item={id:crypto.randomUUID(),title:nextTitle,passage:nextPassage,tags,updatedAt:Date.now()};saveReading(item);setDraft("");}
   };
 
   const articleWordCount = useMemo(() => (passage.match(/[A-Za-z]+(?:['’-][A-Za-z]+)*/g)||[]).length,[passage]);
@@ -206,13 +201,16 @@ export default function Home() {
         <button className="brand" onClick={()=>{setPassage("");setArticleTitle("");setView("read")}}>Lumen</button>
         <nav aria-label="Primary navigation">
           <button className={view==="read"?"navActive":""} onClick={()=>setView("read")}>{copy("Read","阅读")}</button>
+          <button className={view==="history"?"navActive":""} onClick={()=>setView("history")}>History <span className="badge">{readingHistory.length}</span></button>
           <button className={view==="vocab"?"navActive":""} onClick={()=>setView("vocab")}>{copy("Vocabulary","生词本")} <span className="badge">{saved.length}</span></button>
           <button className={view==="phrases"?"navActive":""} onClick={()=>setView("phrases")}>{copy("Phrases","词组")} <span className="badge">{savedPhrases.length}</span></button>
           <button className={view==="sentences"?"navActive":""} onClick={()=>setView("sentences")}>{copy("Sentences","长难句")} <span className="badge">{savedSentences.length}</span></button>
         </nav>
       </header>
 
-      {view==="phrases" ? (
+      {view==="history" ? (
+        <section className="vocabPage"><p className="eyebrow">READING HISTORY</p><h1>Your readings.</h1>{readingHistory.length===0?<div className="empty"><p>No saved readings yet.</p></div>:<div className="historyList">{readingHistory.map((item)=><article className="historyCard" key={item.id}><div><span>{new Date(item.updatedAt).toLocaleString()}</span><h2>{item.title}</h2><p>{item.passage.slice(0,180)}{item.passage.length>180?"…":""}</p></div><div className="historyActions"><button onClick={()=>openReading(item)}>Open →</button><button onClick={()=>removeReading(item.id)}>Remove</button></div></article>)}</div>}</section>
+      ) : view==="phrases" ? (
         <section className="vocabPage"><p className="eyebrow">SAVED PHRASES</p><h1>Your phrases.</h1>{savedPhrases.length===0?<div className="empty"><p>No phrases saved yet.</p></div>:<div className="wordList">{savedPhrases.map((item)=><details key={item.id} className="savedCard"><summary><span className="phraseMark">P</span><h2>{item.phrase}</h2><span className="expandLabel">＋</span></summary><div className="wordDetail"><div className="analysisSection"><b>ENGLISH DEFINITION</b><p>{englishDefinition(item)}</p></div><div className="analysisSection chineseMeaning"><b>中文意思</b><p>{meaningFor(item)||"正在补充中文意思……"}</p></div><div className="analysisSection contextQuote"><b>SENTENCE IN THE PASSAGE</b><p>{item.contextSentence}</p></div><div className="savedActions"><button onClick={()=>speak(item.phrase,"en-GB")}>▶</button><button onClick={()=>removePhrase(item.id)}>Remove</button></div></div></details>)}</div>}</section>
       ) : view==="sentences" ? (
         <section className="vocabPage">

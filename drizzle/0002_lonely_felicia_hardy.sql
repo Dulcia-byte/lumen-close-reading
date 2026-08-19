@@ -1,0 +1,1 @@
+CREATE INDEX `idx_reading_history_user_updated` ON `reading_history` (`user_id`,`updated_at`);
