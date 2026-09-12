@@ -1,3 +1,5 @@
+import { ustcChat } from "../../lib/ustc-llm";
+
 export async function POST(request: Request) {
   try {
     const { passage, mode } = await request.json();
@@ -5,13 +7,10 @@ export async function POST(request: Request) {
     const apiKey = process.env.DEEPSEEK_API_KEY;
     if (!apiKey) return Response.json({ tags: [] });
     const language = mode === "en" ? "Write labels in English." : "Write every label as English / 中文.";
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "deepseek-chat", temperature: 0.1, response_format: { type: "json_object" }, messages: [
+    const response = await ustcChat(apiKey, [
         { role: "system", content: `Return JSON only with a tags array containing 1-3 short topic labels for the passage. ${language} Order labels strictly from broad domain to narrow subject, for example Technology, Ecology, Extreme weather. Do not summarize, number, or add punctuation to labels.` },
         { role: "user", content: passage.slice(0,8000) },
-      ] }),
-    });
+      ], 0.1);
     if (!response.ok) return Response.json({ tags: [] });
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "{}";
