@@ -1,5 +1,4 @@
 const DEEPSEEK_API_BASE = "https://api.deepseek.com";
-const REQUEST_TIMEOUT_MS = 15_000;
 
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
@@ -10,7 +9,6 @@ export async function ustcChat(apiKey: string, messages: ChatMessage[], temperat
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model, temperature, response_format: { type: "json_object" }, messages }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("application/json")) return response;
