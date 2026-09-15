@@ -7,10 +7,8 @@ export async function POST(request: Request) {
   try {
     const { sentence, mode = "both", kind = "sentence" } = await request.json() as { sentence?: string; mode?: Mode; kind?: AnalysisKind };
     if (!sentence) return Response.json({ error: "A sentence is required." }, { status: 400 });
-    const apiKey = process.env.DEEPSEEK_API_KEY;
-    if (!apiKey) return Response.json({ error: "DeepSeek API is not configured." }, { status: 503 });
     const language = "所有分析内容必须使用简洁、自然的中文；保留必要的英文语法片段，并提供准确的中文翻译。";
-    const response = await ustcChat(apiKey, [
+    const response = await ustcChat([
         { role: "system", content: `You create compact close-reading notes for IELTS learners, similar to a good teacher's sentence walkthrough. ${language} Return JSON only with keys sentence, kind, logic, mainClause, structure, explanation, translation. kind must be ${kind}. logic is one concise statement of what the ${kind} is doing. mainClause identifies the grammatical backbone. structure is an array of 2-5 concise strings; label important blocks such as A, B, concession, relative clause, or result when useful, then explain their role and meaning. explanation is a short synthesis, not a repetition. Provide no example sentences, vocabulary lists, collocations, exercises, or unrelated advice. If translation is omitted, return an empty string.` },
         { role: "user", content: `Analyze this ${kind} only:\n${sentence.slice(0, 2400)}` },
       ], 0.2);

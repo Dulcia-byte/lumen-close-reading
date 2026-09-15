@@ -4,9 +4,7 @@ export async function POST(request: Request) {
   try {
     const { word, sentence } = await request.json() as { word?: string; sentence?: string };
     if (!word || !sentence) return Response.json({ error: "A word and sentence are required." }, { status: 400 });
-    const apiKey = process.env.DEEPSEEK_API_KEY;
-    if (!apiKey) return Response.json({ error: "Add DEEPSEEK_API_KEY to .env.local, then restart Lumen." }, { status: 503 });
-    const response = await ustcChat(apiKey, [
+    const response = await ustcChat([
         { role: "system", content: "You are a concise learner's dictionary. Return JSON only with keys word, lemma, partOfSpeech, ukIpa, usIpa, definition, chineseMeaning. definition is one clear English sentence for the selected word's meaning in context. chineseMeaning is a short Chinese meaning in the same context. Do not include examples, collocations, synonyms, or study labels. IPA values must include slash marks." },
         { role: "user", content: `Selected word: ${word}\nSentence: ${sentence.slice(0, 600)}` },
       ], 0.2);

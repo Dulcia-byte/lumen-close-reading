@@ -1,14 +1,16 @@
-const DEEPSEEK_API_BASE = "https://api.deepseek.com";
-
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-export async function ustcChat(apiKey: string, messages: ChatMessage[], temperature: number) {
-  const model = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
+export async function ustcChat(messages: ChatMessage[], temperature: number) {
+  const proxyUrl = process.env.DEEPSEEK_PROXY_URL;
+  const proxyToken = process.env.DEEPSEEK_PROXY_TOKEN;
+  if (!proxyUrl || !proxyToken) {
+    return Response.json({ error: { message: "DeepSeek proxy is not configured." } }, { status: 503 });
+  }
   try {
-    const response = await fetch(`${DEEPSEEK_API_BASE}/chat/completions`, {
+    const response = await fetch(proxyUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model, temperature, response_format: { type: "json_object" }, messages }),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${proxyToken}` },
+      body: JSON.stringify({ temperature, response_format: { type: "json_object" }, messages }),
     });
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("application/json")) return response;
@@ -18,7 +20,7 @@ export async function ustcChat(apiKey: string, messages: ChatMessage[], temperat
   } catch (reason) {
     const timedOut = reason instanceof Error && (reason.name === "TimeoutError" || reason.name === "AbortError");
     return Response.json({
-      error: { message: timedOut ? "DeepSeek 官方接口响应超时（15 秒），请稍后重试。" : "无法连接 DeepSeek 官方接口，请检查网络后重试。" },
+      error: { message: timedOut ? "DeepSeek 中转响应超时，请稍后重试。" : "无法连接 DeepSeek 中转，请稍后重试。" },
     }, { status: 503 });
   }
 }

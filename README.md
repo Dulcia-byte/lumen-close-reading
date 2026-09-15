@@ -16,6 +16,10 @@ npm run dev
 npm run build
 ```
 
+## DeepSeek proxy
+
+Lumen sends model requests from its server routes to the authenticated Vercel function in `vercel-proxy/`. Configure the Site with `DEEPSEEK_PROXY_URL` and secret `DEEPSEEK_PROXY_TOKEN`; configure Vercel as described in `vercel-proxy/README.md`. The official DeepSeek API key exists only in Vercel's server-side environment.
+
 This starter does not use `wrangler.jsonc`.
 
 ## Included Shape
