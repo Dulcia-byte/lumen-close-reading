@@ -59,6 +59,7 @@ export default function Home() {
   const [sentenceError,setSentenceError] = useState("");
   const [panel,setPanel] = useState<"word"|"phrase"|"sentence">("word");
   const [view,setView] = useState<"read"|"history"|"vocab"|"phrases"|"sentences">("read");
+  const [mobileCardOpen,setMobileCardOpen] = useState(false);
   const requestId = useRef(0);
   const passageRef = useRef<HTMLElement|null>(null);
 
@@ -121,7 +122,7 @@ export default function Home() {
     const clean = word.replace(/[^A-Za-z'’-]/g,"");
     if (!clean) return;
     const id = ++requestId.current;
-    setPanel("word"); setActive(clean); setWordSentence(sentence); setCard(null); setAnalysis(null); setError(""); setLoading(true);
+    setPanel("word"); setMobileCardOpen(true); setActive(clean); setWordSentence(sentence); setCard(null); setAnalysis(null); setError(""); setLoading(true);
     try {
       const response = await fetch("/api/define",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({word:clean,sentence})});
       const data = await response.json();
@@ -133,7 +134,7 @@ export default function Home() {
   }
 
   async function analyzeSentence(sentence:string, kind:AnalysisKind="sentence") {
-    setPanel("sentence"); setAnalysis(null); setCard(null); setSentenceError(""); setSentenceLoading(true);
+    setPanel("sentence"); setMobileCardOpen(true); setAnalysis(null); setCard(null); setSentenceError(""); setSentenceLoading(true);
     try {
       const response = await fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({sentence,mode,kind})});
       const data = await response.json();
@@ -144,7 +145,7 @@ export default function Home() {
   }
 
   async function inspectPhrase(phrase:string, contextSentence:string) {
-    setPanel("phrase"); setPhraseCard(null); setError(""); setLoading(true);
+    setPanel("phrase"); setMobileCardOpen(true); setPhraseCard(null); setError(""); setLoading(true);
     try {
       const response=await fetch("/api/phrase",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({phrase,contextSentence})});
       const data=await response.json();
@@ -237,8 +238,8 @@ export default function Home() {
           <div className="readerTop"><div><p className="eyebrow">{copy("CLOSE READING","精读模式")}</p><h1>{articleTitle}</h1><div className="articleMeta"><span>{articleWordCount} {copy("words","词")}</span><span>≈ {readingMinutes} {copy(readingMinutes===1?"minute":"minutes","分钟")}</span>{tagsLoading?<span className="tagLoading">{copy("Finding topics…","正在识别主题……")}</span>:articleTags.map((tag)=><span className="topicTag" key={tag}>{tag}</span>)}</div></div><button className="newText" onClick={()=>{setPassage("");setArticleTitle("");setArticleTags([])}}>← {copy("New passage","新材料")}</button></div>
           <div className="readingGrid">
             <article ref={passageRef} onMouseUp={analyzeSelection} className="passage continuousPassage" aria-label="Interactive reading passage">{paragraphs.map((paragraph,paragraphIndex)=>{const paragraphTokens=paragraph.split(/([A-Za-z]+(?:['’-][A-Za-z]+)*)/g);return <p className="articleParagraph" key={paragraphIndex}>{paragraphTokens.map((token,index)=>/^[A-Za-z]/.test(token)?<span role="button" tabIndex={0} key={index} onClick={()=>inspectWord(token,sentenceForToken(paragraph,paragraphTokens,index))} onKeyDown={(event)=>{if(event.key==="Enter")inspectWord(token,sentenceForToken(paragraph,paragraphTokens,index))}} className={active.toLowerCase()===token.toLowerCase()?"word activeWord":"word"}>{token}</span>:<span key={index}>{token}</span>)}</p>})}</article>
-            <aside className="wordCard" aria-live="polite" id="reading-insight">
-              <div className="mobileCardHandle" aria-hidden="true" />
+            <aside className={`wordCard ${mobileCardOpen?"mobileOpen":""}`} aria-live="polite" id="reading-insight">
+              <div className="mobileCardHandle"><button className="mobileCardToggle" aria-label={mobileCardOpen?"收起释义卡":"展开释义卡"} aria-expanded={mobileCardOpen} onClick={()=>setMobileCardOpen((open)=>!open)}><span aria-hidden="true"/></button></div>
               {panel==="word" && <>{!active && <div className="cardHint"><span className="step">{copy("WORD CARD","单词卡")}</span><h2>{copy("Select a word or analyze a sentence.","点击单词，或分析一个句子。")}</h2><p>{copy("Contextual definitions and sentence structure appear here.","语境释义和句子结构会显示在这里。")}</p></div>}{loading && <div className="loading"><i/><p>{copy("Reading the context…","正在理解语境……")}</p></div>}{error && <div className="cardError"><span>Couldn’t define this word</span><p>{error}</p></div>}{card && <div className="definition"><span className="part">{card.partOfSpeech}</span><h2>{card.lemma}</h2><div className="pronounce"><button onClick={()=>speak(card.lemma,"en-GB")}><small>UK</small>{card.ukIpa} <b>▶</b></button><button onClick={()=>speak(card.lemma,"en-US")}><small>US</small>{card.usIpa} <b>▶</b></button></div><p>{card.definition}</p><button className="save" onClick={saveWord}>{saved.some((item)=>item.id===card.lemma.toLowerCase())?"Saved ✓":"＋ Add to vocabulary"}</button></div>}</>}
               {panel==="phrase"&&<>{loading&&<div className="loading"><i/><p>{copy("Reading the phrase…","正在理解词组……")}</p></div>}{error&&<div className="cardError"><span>{copy("Couldn’t explain this phrase","无法解释该词组")}</span><p>{error}</p></div>}{phraseCard&&<div className="definition"><span className="part">{copy("PHRASE","词组")}</span><h2 className="phraseTitle">{phraseCard.phrase}</h2><button className="phraseSpeak" onClick={()=>speak(phraseCard.phrase,"en-GB")}>▶ {copy("Listen","朗读")}</button><p>{phraseCard.definition}</p><div className="contextQuote"><b>{copy("Sentence in the passage","文中原句")}</b><p>{phraseCard.contextSentence}</p></div><button className="save" onClick={savePhrase}>{savedPhrases.some((item)=>item.id===phraseCard.phrase.toLowerCase())?copy("Saved ✓","已收藏 ✓"):copy("＋ Save phrase","＋ 收藏词组")}</button></div>}</>}
               {panel==="sentence" && <>{sentenceLoading&&<div className="loading"><i/><p>正在梳理结构……</p></div>}{sentenceError&&<div className="cardError"><span>无法分析这段内容</span><p>{sentenceError}</p></div>}{analysis&&<div className="sentenceAnalysis"><span className="part">{analysis.kind==="paragraph"?"段落分析":"句子分析"}</span><blockquote>{analysis.sentence}</blockquote>{analysis.translation&&<div className="analysisSection translationBlock"><b>中文翻译</b><p>{analysis.translation}</p></div>}<div className="analysisSection logicBlock"><b>句子逻辑</b><p>{analysis.logic}</p></div><h3 className="analysisTitle">解析</h3><div className="analysisSection"><b>主干</b><p>{analysis.mainClause}</p></div><div className="analysisSection"><b>关键分块</b><ol>{analysis.structure.map((part,index)=><li key={index}>{part}</li>)}</ol></div><div className="analysisSection"><b>简析</b><p>{analysis.explanation}</p></div><button className="save" onClick={saveSentence}>{savedSentences.some((item)=>item.id===`${mode}:${analysis.kind}:${analysis.sentence}`)?"已收藏 ✓":"＋ 收藏原文与分析"}</button></div>}</>}
