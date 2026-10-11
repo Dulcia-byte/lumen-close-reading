@@ -1,104 +1,70 @@
-# vinext-starter
+# Lumen Close Reading
 
-A clean full-stack starter running on
-[vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and
-Drizzle support.
+Lumen 是一个面向英语精读的开源 Web 应用。粘贴英文文章后，可以查询单词和词组、分析长难句、收藏学习内容，并按掌握状态复习词汇。
 
-## Prerequisites
+## 功能
 
-- Node.js `>=22.13.0`
+- 粘贴英文文章并自动生成标题、词数、预计阅读时间和主题标签
+- 单词与词组的英文释义、中文释义、音标及原文例句
+- 英式与美式发音（使用浏览器语音合成）
+- 中文长难句分析：翻译、句子逻辑、主干、结构与解析
+- 收藏单词、词组和句子，在原文中高亮显示
+- 将词汇标记为“认识”“不认识”或“未复习”，并按状态筛选
+- 阅读历史和跨设备收藏（部署时启用 D1 数据库）
+- 响应式手机端布局；窄屏下分析结果以移动端抽屉显示
 
-## Quick Start
+## 技术栈
+
+- React 19 + TypeScript
+- Vinext / Vite / Cloudflare Workers
+- Cloudflare D1 + Drizzle ORM
+- DeepSeek API（通过独立的服务端代理调用）
+
+## 本地运行
+
+要求 Node.js 22.13 或更高版本。
 
 ```bash
 npm install
+copy .env.example .env.local
 npm run dev
+```
+
+打开 `http://localhost:3000`。在 macOS 或 Linux 上，将第二条命令改为 `cp .env.example .env.local`。
+
+## 配置 AI 服务
+
+为避免将 DeepSeek API Key 暴露给浏览器，项目使用 `vercel-proxy/` 中的服务端代理：
+
+1. 将 `vercel-proxy/` 部署为一个 Vercel 项目。
+2. 在 Vercel 中配置 `DEEPSEEK_API_KEY`、`LUMEN_PROXY_TOKEN`，可选配置 `DEEPSEEK_MODEL`。
+3. 在 Lumen 的服务端环境中配置 `DEEPSEEK_PROXY_URL` 和相同的 `DEEPSEEK_PROXY_TOKEN`。
+
+完整说明见 [`vercel-proxy/README.md`](vercel-proxy/README.md)。不要把真实密钥提交到 Git。
+
+## 构建与测试
+
+```bash
 npm run build
+npm test
 ```
 
-## DeepSeek proxy
+## 部署
 
-Lumen sends model requests from its server routes to the authenticated Vercel function in `vercel-proxy/`. Configure the Site with `DEEPSEEK_PROXY_URL` and secret `DEEPSEEK_PROXY_TOKEN`; configure Vercel as described in `vercel-proxy/README.md`. The official DeepSeek API key exists only in Vercel's server-side environment.
+项目可部署到支持 Cloudflare Workers 和 D1 的平台。`.openai/hosting.json` 不包含原作者的 Site ID；使用 OpenAI Sites 部署时，平台会为你的副本写入自己的项目 ID。
 
-This starter does not use `wrangler.jsonc`.
+如果只想本地试用，文章和学习记录会保存在浏览器本地；启用 D1 后可保存阅读历史及收藏内容。
 
-## Included Shape
+## 手机端
 
-- edit site code under `app/`
-- `.openai/hosting.json` declares optional Sites D1 and R2 bindings
-- `vite.config.ts` simulates declared bindings for local development
-- `db/schema.ts` starts intentionally empty
-- `examples/d1/` contains an optional D1 example surface
-- `drizzle.config.ts` supports local migration generation when needed
+界面在宽度小于 760px 时切换为单列布局：正文与分析面板上下排列、固定侧栏自动解除、收藏卡片和复习按钮适配窄屏。建议在手机浏览器中使用最新版本的 Chrome、Edge 或 Safari。
 
-## Workspace Auth Headers
+## 隐私
 
-Signed-in visitors receive both `oai-authenticated-user-id` and `oai-authenticated-user-email`. Private Sites require every visitor to sign in; public Sites may also have anonymous visitors, for whom neither header is present.
+- API Key 和代理令牌只应存在于部署平台的服务端环境变量中。
+- 浏览器本地保存的数据不会自动上传到 GitHub。
+- 请勿将 `.env.local` 或任何真实密钥提交到仓库。
 
-The user ID is stable for the same user on the same Site and different across Sites. Email and name are intended for display or contact purposes.
+## License
 
-SIWC-authenticated workspace sites may also receive
-`oai-authenticated-user-full-name` when the user's SIWC profile has a non-empty
-`name` claim. The full-name value is percent-encoded UTF-8 and is accompanied by
-`oai-authenticated-user-full-name-encoding: percent-encoded-utf-8`.
-
-Treat the full name as optional and fall back to email when it is absent:
-
-```tsx
-import { headers } from "next/headers";
-
-export default async function Home() {
-  const requestHeaders = await headers();
-  const userId = requestHeaders.get("oai-authenticated-user-id");
-  const email = requestHeaders.get("oai-authenticated-user-email");
-  const encodedFullName = requestHeaders.get("oai-authenticated-user-full-name");
-  const fullName =
-    encodedFullName &&
-    requestHeaders.get("oai-authenticated-user-full-name-encoding") ===
-      "percent-encoded-utf-8"
-      ? decodeURIComponent(encodedFullName)
-      : null;
-
-  const displayName = fullName ?? email;
-  // ...
-}
-```
-
-## Optional Dispatch-Owned ChatGPT Sign-In
-
-Import the ready-to-use helpers from `app/chatgpt-auth.ts` when the site needs
-optional or required ChatGPT sign-in:
-
-- Use `getChatGPTUser()` for optional signed-in UI.
-- Use `requireChatGPTUser(returnTo)` for server-rendered pages that should send
-  anonymous visitors through Sign in with ChatGPT.
-- Use `chatGPTSignInPath(returnTo)` and `chatGPTSignOutPath(returnTo)` for
-  browser links or actions.
-- Pass a same-origin relative `returnTo` path for the destination after sign-in
-  or sign-out. The helper validates and safely encodes it.
-- Mark protected pages with `export const dynamic = "force-dynamic"` because
-  they depend on per-request identity headers.
-
-Dispatch owns `/signin-with-chatgpt`, `/signout-with-chatgpt`, `/callback`, the
-OAuth cookies, and identity header injection. Do not implement app routes for
-those reserved paths. Routes that do not import and call the helper remain
-anonymous-compatible.
-
-SIWC establishes identity only; it does not prove workspace membership. Use the
-Sites hosting platform's access policy controls for workspace-wide restrictions,
-or enforce explicit server-side membership or allowlist checks.
-
-Use SIWC for account pages, user-specific dashboards, saved records, and write
-actions tied to the current ChatGPT user. Leave public content anonymous.
-
-## Useful Commands
-
-- `npm run dev`: start local development
-- `npm run build`: verify the vinext build output
-- `npm test`: build the starter and verify its rendered loading skeleton
-- `npm run db:generate`: generate Drizzle migrations after schema changes
-
-## Learn More
-
-- [vinext Documentation](https://github.com/cloudflare/vinext)
-- [Drizzle D1 Guide](https://orm.drizzle.team/docs/get-started/d1-new)
+[MIT](LICENSE)
