@@ -26,7 +26,7 @@ export default async function handler(request, response) {
       body: JSON.stringify({
         model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
         temperature: typeof body.temperature === "number" ? Math.min(2, Math.max(0, body.temperature)) : 0.2,
-        response_format: { type: "json_object" },
+        ...(body.response_format?.type === "json_object" ? { response_format: { type: "json_object" } } : {}),
         messages: body.messages,
       }),
     });
