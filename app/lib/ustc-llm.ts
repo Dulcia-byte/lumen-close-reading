@@ -1,16 +1,19 @@
 type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-export async function ustcChat(messages: ChatMessage[], temperature: number) {
+type ChatOptions = { json?: boolean };
+
+export async function ustcChat(messages: ChatMessage[], temperature: number, options: ChatOptions = {}) {
   const proxyUrl = process.env.DEEPSEEK_PROXY_URL;
   const proxyToken = process.env.DEEPSEEK_PROXY_TOKEN;
   if (!proxyUrl || !proxyToken) {
     return Response.json({ error: { message: "DeepSeek proxy is not configured." } }, { status: 503 });
   }
+  const json = options.json !== false;
   try {
     const response = await fetch(proxyUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${proxyToken}` },
-      body: JSON.stringify({ temperature, response_format: { type: "json_object" }, messages }),
+      body: JSON.stringify({ temperature, response_format: json ? { type: "json_object" } : undefined, messages }),
     });
     const contentType = response.headers.get("content-type") || "";
     if (contentType.includes("application/json")) return response;
